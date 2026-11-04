@@ -67,8 +67,8 @@ object Dtcs {
     )
 
     private val LAMBDA = t(
-        "The upstream oxygen sensor is a wideband (5-wire) one. If a new sensor doesn't clear the code, the cause is around it: the wiring and connector (heat or chafing near the exhaust), the heater fuse and relay, and the battery / charging voltage. Check those before buying another sensor.",
-        "La sonde lambda amont est une sonde large bande (5 fils). Si une sonde neuve ne fait pas disparaître le code, la cause est autour : faisceau et connecteur (chaleur ou frottement près de l'échappement), fusible et relais du chauffage, tension de batterie et de charge. À vérifier avant d'acheter une autre sonde.",
+        "The upstream oxygen sensor is a wideband (5-wire) one. If a new sensor doesn't clear the code, the cause is around it. The ECU also sets these codes when the sensor's reading doesn't match the air it measured: look for air getting in between the air flow sensor and the turbo (inlet tube and hose, clamps; oily traces), or an exhaust leak before the sensor (turbo outlet gasket). Then the wiring and connector (heat or chafing near the exhaust), the heater fuse and relay, and the battery / charging voltage. Check those before buying another sensor.",
+        "La sonde lambda amont est une sonde large bande (5 fils). Si une sonde neuve ne fait pas disparaître le code, la cause est autour. Le calculateur pose aussi ces codes quand la mesure de la sonde ne colle pas avec l'air qu'il a mesuré : chercher une entrée d'air entre le débitmètre et le turbo (tube et durite d'entrée, colliers ; traces d'huile), ou une fuite d'échappement avant la sonde (joint de sortie turbo). Puis le faisceau et le connecteur (chaleur ou frottement près de l'échappement), le fusible et le relais du chauffage, la tension de batterie et de charge. À vérifier avant d'acheter une autre sonde.",
     )
     private val PEDAL = t(
         "The accelerator pedal has two sensors that must agree. Check its connector (corrosion, loose pins) and wiring; if the fault stays, the pedal assembly is replaced as one part. A low battery voltage can set these codes too.",
