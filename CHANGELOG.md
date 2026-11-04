@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- A live session cut off by a lost connection now ends properly (its check-up is kept) instead of showing as running with nothing being read.
+
 ## 0.2.1
 
 - Reconnects by itself when the adapter drops the link (it restarts when the engine is started), and a live session carries on instead of stopping.

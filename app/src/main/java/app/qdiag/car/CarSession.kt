@@ -411,13 +411,28 @@ class CarSession(
                 }
                 cycle++
             }
+            // The link didn't come back: end the session (and keep its check-up) rather than
+            // showing it as running with nothing being read.
+            if (isActive) {
+                Diag.log("live.ended", "why" to "link")
+                finishLive()
+            }
         }
     }
 
     fun stopLive() {
-        val job = liveJob ?: return
+        val job = liveJob ?: run {
+            // A session left marked as running (link lost before 0.2.2): just clear it.
+            if (_live.value.running) _live.update { it.copy(running = false) }
+            return
+        }
         job.cancel()
+        finishLive()
+    }
+
+    private fun finishLive() {
         liveJob = null
+        if (!_live.value.running) return
         val started = _live.value.startedAt ?: System.currentTimeMillis()
         _live.update { it.copy(running = false) }
         val findings = analyzer.findings()
