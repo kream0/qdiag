@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+- Recording continues with the screen off or another app in front: while connected to the car, QDiag shows a "Connecté à la voiture" notification and keeps the adapter's Wi-Fi awake. Allow notifications when asked.
+
 ## 0.2.3
 
 - Keeps the link to the adapter busy (it asks for the battery voltage every few seconds) so it no longer drops while you move between screens; the voltage on the home screen stays up to date.

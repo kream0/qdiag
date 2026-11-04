@@ -146,11 +146,16 @@ class CarSession(
         if (_link.value.state == LinkState.CONNECTING || _link.value.state == LinkState.JOINING) return
         wantLink = true
         reconnectJob?.cancel()
+        // Keeps the app alive (screen off, another app in front) while linked to the car.
+        LinkService.start(context)
         connectJob = scope.launch {
             _link.value = LinkStatus(LinkState.CONNECTING)
             if (open(firstTime = true)) {
                 readVehicle()
                 readCodes()
+            } else {
+                wantLink = false
+                LinkService.stop(context)
             }
         }
     }
@@ -224,6 +229,8 @@ class CarSession(
             }
             Diag.log("link.gaveUp")
             _link.value = LinkStatus(LinkState.FAILED, "LOST")
+            wantLink = false
+            LinkService.stop(context)
         }
     }
 
@@ -246,6 +253,7 @@ class CarSession(
 
     fun disconnect() {
         wantLink = false
+        LinkService.stop(context)
         keepAliveJob?.cancel()
         keepAliveJob = null
         connectJob?.cancel()
