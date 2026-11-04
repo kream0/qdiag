@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4
+
+- The turbo check now recognises a full-throttle run on this car (its engine computer never reports more than about 84 % load), and judges the boost from the best pulls.
+- Oxygen sensor codes now point to intake and exhaust leaks before wiring.
+
 ## 0.3.3
 
 - When the drive ends (engine off, adapter gone), the drive check-up is sent to the logbook before the app goes to sleep, instead of waiting until you open it again.

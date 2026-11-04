@@ -68,4 +68,19 @@ class ChecksTest {
         a.addAll((60 until 120).map { Sample(it * 1000L, mapOf("battV" to 12.5, "rpm" to 0.0)) })
         assertTrue(a.findings().none { it.id == "battery" })
     }
+
+    @Test
+    fun boostFromThisCarsFullThrottleRun() {
+        // 04/11/2026: load tops out at 84 %, intake pressure 226–249 kPa at 3,000–3,600 rpm.
+        val a = Analyzer()
+        val pulls = listOf(
+            Triple(3026.0, 60.4, 226.0), Triple(3223.0, 58.0, 233.0), Triple(3400.0, 83.9, 249.0),
+            Triple(1534.0, 62.8, 122.0), Triple(3467.0, 18.8, 140.0),
+        )
+        a.addAll((0 until 40).map { Sample(it * 1000L, mapOf("rpm" to 1200.0, "load" to 25.0, "map" to 104.0)) })
+        a.addAll(pulls.mapIndexed { i, (rpm, load, map) -> Sample(50_000L + i * 1000, mapOf("rpm" to rpm, "load" to load, "map" to map)) })
+        val boost = a.findings().first { it.id == "boost" }
+        assertEquals(Level.GOOD, boost.level)
+        assertTrue(boost.detail.fr.contains("133") || boost.detail.fr.contains("126"), boost.detail.fr)
+    }
 }

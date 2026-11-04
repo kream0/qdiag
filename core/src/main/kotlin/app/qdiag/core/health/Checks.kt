@@ -135,9 +135,13 @@ class Analyzer {
     }
 
     /** Full-load samples: pedal or load near the top, in the turbo's working range. */
+    /**
+     * Hard acceleration in the turbo's range. The Qashqai's ECU reports calculated load (PID 04)
+     * no higher than ~84 % even flat out, and gives no pedal position, so above 55 % counts.
+     */
     private fun fullLoad(): List<Sample> = samples.filter {
         val rpm = it["rpm"] ?: return@filter false
-        val heavy = (it["pedal"] ?: 0.0) >= 80 || (it["load"] ?: 0.0) >= 85
+        val heavy = (it["pedal"] ?: 0.0) >= 80 || (it["load"] ?: 0.0) >= 55
         heavy && rpm in 1800.0..3800.0
     }
 
@@ -156,7 +160,8 @@ class Analyzer {
                 ),
             )
         }
-        val peak = pressures.sorted().let { it[(it.size * 9) / 10] } - baro
+        // The best of the hard pulls (median of the three highest readings: one stray value doesn't count).
+        val peak = pressures.sortedDescending().take(3).let { it[it.size / 2] } - baro
         val gaps = full.mapNotNull { s -> s["boostCmd"]?.let { cmd -> (s["boost"] ?: s["mapA"] ?: s["map"])?.let { cmd - it } } }
         val gap = median(gaps)
         val level = when {
