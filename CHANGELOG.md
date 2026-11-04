@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3
+
+- When the drive ends (engine off, adapter gone), the drive check-up is sent to the logbook before the app goes to sleep, instead of waiting until you open it again.
+- The battery's resting voltage ignores the first 3 minutes after the engine stops (it still holds the charge it just took).
+
 ## 0.3.2
 
 - The battery check only judges the resting voltage when the engine is known to be stopped (a session without engine speed no longer reports "battery charged" from the charging voltage).

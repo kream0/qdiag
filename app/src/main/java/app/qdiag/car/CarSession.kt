@@ -230,7 +230,10 @@ class CarSession(
             Diag.log("link.gaveUp")
             _link.value = LinkStatus(LinkState.FAILED, "LOST")
             wantLink = false
-            LinkService.stop(context)
+            // Let the live session end and its report go out while the service still keeps the
+            // app online (without it Android cuts a background app's network at once).
+            liveJob?.join()
+            stopServiceAfterSending()
         }
     }
 
@@ -251,9 +254,19 @@ class CarSession(
         }
     }
 
+    /** Sends what's waiting (readings, diagnostics), then lets the app sleep. */
+    private fun stopServiceAfterSending() {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { Reports.flush() }
+                runCatching { Diag.flush() }
+            }
+            if (!wantLink) LinkService.stop(context)
+        }
+    }
+
     fun disconnect() {
         wantLink = false
-        LinkService.stop(context)
         keepAliveJob?.cancel()
         keepAliveJob = null
         connectJob?.cancel()
@@ -264,7 +277,7 @@ class CarSession(
         close()
         _link.value = LinkStatus(LinkState.IDLE)
         Diag.log("link.disconnect")
-        scope.launch(Dispatchers.IO) { Diag.flush() }
+        stopServiceAfterSending()
     }
 
     private fun close() {
@@ -417,7 +430,7 @@ class CarSession(
             while (isActive) {
                 if (!connected) {
                     // Reconnecting (adapter rebooted): keep the session and carry on once it's back.
-                    if (reconnectJob?.isActive == true) {
+                    if (wantLink && _link.value.state == LinkState.CONNECTING) {
                         delay(500)
                         continue
                     }

@@ -59,4 +59,13 @@ class ChecksTest {
         b.addAll((0 until 50).map { Sample(it * 1000L, mapOf("battV" to 11.9, "rpm" to 0.0)) })
         assertEquals(Level.WARN, b.findings().first { it.id == "battery" }.level)
     }
+
+    @Test
+    fun batteryRightAfterStoppingIsNotResting() {
+        val a = Analyzer()
+        // Running at 14.1 V, then stopped at 12.5 V for one minute: no resting verdict.
+        a.addAll((0 until 60).map { Sample(it * 1000L, mapOf("battV" to 14.1, "rpm" to 800.0)) })
+        a.addAll((60 until 120).map { Sample(it * 1000L, mapOf("battV" to 12.5, "rpm" to 0.0)) })
+        assertTrue(a.findings().none { it.id == "battery" })
+    }
 }

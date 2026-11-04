@@ -48,8 +48,11 @@ class Analyzer {
 
     /** Resting voltage, engine off (the adapter's own reading, `ATRV`, or the ECU's). */
     private fun battery(): Finding? {
-        // Above 13.3 V the alternator is still charging (or just stopped): not a resting voltage.
-        val v = samples.filter { stopped(it) }.mapNotNull { it["battV"] ?: it["ecuV"] }.filter { it < 13.3 }
+        // Resting voltage only: engine known stopped, not within 3 minutes after it ran (the
+        // battery still holds the charge it just took), and below 13.3 V.
+        val runs = samples.filter { running(it) }.map { it.t }
+        val v = samples.filter { s -> stopped(s) && runs.none { it <= s.t && s.t - it < 180_000 } }
+            .mapNotNull { it["battV"] ?: it["ecuV"] }.filter { it < 13.3 }
         val m = median(v) ?: return null
         val (level, en, fr) = when {
             m >= 12.4 -> Triple(Level.GOOD, "Battery charged", "Batterie chargée")
