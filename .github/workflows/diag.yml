@@ -1,0 +1,49 @@
+name: Diagnostics
+
+# Prints what the app sent to its diagnostics topic (app/.../diag/Diag.kt → ntfy.sh, kept 12 h),
+# for reading with the job logs: the dev sandbox can't reach ntfy.sh. Touch .github/diag.trigger
+# (e.g. write the time into it) and push to read the latest. Nothing here is published: the logs
+# of a public repo's runs are public, so the app masks the VIN's serial part before sending.
+on:
+  push:
+    branches: ['**']
+    paths:
+      - '.github/diag.trigger'
+      - '.github/workflows/diag.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  print:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Diagnostics of the last 12 hours
+        run: |
+          curl -sS "https://ntfy.sh/qdiag-diag-e20390278516129da12a/json?poll=1&since=12h" | python3 -c '
+          import json, sys, datetime, urllib.request
+          for raw in sys.stdin:
+              m = json.loads(raw)
+              if m.get("event") != "message":
+                  continue
+              body = m.get("message", "")
+              att = m.get("attachment")
+              if att:
+                  # A batch over 4 KB becomes a short-lived attachment.
+                  try:
+                      body = urllib.request.urlopen(att["url"]).read().decode("utf-8")
+                  except Exception as e:
+                      print("events", att["name"], "not available:", e)
+                      continue
+              for line in body.splitlines():
+                  try:
+                      d = json.loads(line)
+                  except ValueError:
+                      print("?", line); continue
+                  ms = d.pop("t", 0)
+                  t = datetime.datetime.fromtimestamp(ms / 1000, datetime.timezone.utc).strftime("%m-%d %H:%M:%S") + f".{ms % 1000:03d}"
+                  s, e = d.pop("s", "?"), d.pop("e", "?")
+                  print(t, s, e, " ".join(f"{k}={v}" for k, v in d.items()))
+          '
