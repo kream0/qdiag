@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Live data started right after connecting now waits for the list of values the car offers, instead of recording only the battery.
+
 ## 0.3.0
 
 - Recording continues with the screen off or another app in front: while connected to the car, QDiag shows a "Connecté à la voiture" notification and keeps the adapter's Wi-Fi awake. Allow notifications when asked.

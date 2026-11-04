@@ -400,14 +400,15 @@ class CarSession(
         analyzer = Analyzer()
         recorded.clear()
         _findings.value = emptyList()
-        val supported = _info.value.supported
-        val defs: List<PidDef> = Pids.all.filter { it.pid in supported && it.pid !in setOf(0x21, 0x30, 0x31, 0x4D, 0x4E) }
-        val fast = defs.filter { it.pid in fastPids }
-        val slow = defs.filter { it.pid !in fastPids }
         val started = System.currentTimeMillis()
         _live.value = LiveState(running = true, startedAt = started)
-        Diag.log("live.start", "fast" to fast.joinToString(" ") { it.hex }, "slow" to slow.joinToString(" ") { it.hex })
         liveJob = scope.launch {
+            // Started right after connecting, the list of PIDs may not be read yet: read it, and
+            // follow it if it changes (it's read again after a reconnection if it was missing).
+            if (_info.value.supported.isEmpty()) readVehicle()
+            var planned: Set<Int>? = null
+            var fast: List<PidDef> = emptyList()
+            var slow: List<PidDef> = emptyList()
             var cycle = 0
             var lastLog = 0L
             val values = LinkedHashMap<String, Signal>()
@@ -422,8 +423,17 @@ class CarSession(
                     }
                     break
                 }
+                val supported = _info.value.supported
+                if (supported != planned) {
+                    planned = supported
+                    val defs = Pids.all.filter { it.pid in supported && it.pid !in setOf(0x21, 0x30, 0x31, 0x4D, 0x4E) }
+                    fast = defs.filter { it.pid in fastPids }
+                    slow = defs.filter { it.pid !in fastPids }
+                    Diag.log("live.start", "fast" to fast.joinToString(" ") { it.hex }, "slow" to slow.joinToString(" ") { it.hex })
+                }
                 val cycleStart = System.currentTimeMillis()
                 val batch = if (cycle % 5 == 0) fast + slow else fast
+                if (fast.isEmpty()) delay(1_000) // nothing to poll yet but the battery
                 for (def in batch) {
                     val signals = elm { it.read(def.pid) } ?: if (!connected) break else continue
                     for (s in signals) {
