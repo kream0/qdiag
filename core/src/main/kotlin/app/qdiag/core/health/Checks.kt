@@ -240,7 +240,7 @@ object Readiness {
         if (status != null) {
             out += if (status.milOn) Finding(
                 "mil", Level.WARN, Text("Check-engine light on", "Voyant moteur allumé"),
-                Text("The light is on: that is a major defect at the contrôle technique.", "Le voyant est allumé : c'est une défaillance majeure au contrôle technique."),
+                Text("The light is on: at the contrôle technique this usually means a retest.", "Le voyant est allumé : au contrôle technique, c'est en général une contre-visite."),
             ) else Finding(
                 "mil", Level.GOOD, Text("Check-engine light off", "Voyant moteur éteint"),
                 Text("The ECU doesn't ask for the light.", "Le calculateur ne demande pas d'allumer le voyant."),

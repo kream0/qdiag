@@ -35,6 +35,13 @@ Phone: Nothing Phone (4a) Pro. Sideloaded; no store.
   (topic kept 12 h). Unknown PIDs, manufacturer codes (P1xxx) and the KWP/UDS replies there
   are what to add to `core/` next.
 
+## Car logbook readings
+- `diag/Reports.kt` posts one compact JSON per code reading / drive / survey (kind `codes`,
+  `drive`, `survey`, ≤ 3.8 KB) to `ntfy.sh/qdiag-car-<first 24 hex of SHA-256("qdiag-car:" + VIN)>`;
+  before the VIN is known, to the diagnostics topic as event `report`. A scheduled Claude task
+  (owner's account) polls it and updates the private "Carnet Qashqai+2" artifact. Never write the
+  VIN or the derived topic name in this repo.
+
 ## Privacy and safety (public repo)
 - Never commit the car's VIN, plate, invoices, CT reports or real logs. Diagnostics mask the VIN
   serial (`Discovery.mask`); keep it that way for anything new that's logged.

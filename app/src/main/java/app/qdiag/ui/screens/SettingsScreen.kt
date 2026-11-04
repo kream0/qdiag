@@ -35,6 +35,7 @@ import app.qdiag.data.AppSettings
 import app.qdiag.data.Language
 import app.qdiag.data.ThemeMode
 import app.qdiag.diag.Diag
+import app.qdiag.diag.Reports
 import app.qdiag.tr
 import app.qdiag.ui.components.Card
 import app.qdiag.ui.components.Field
@@ -142,6 +143,19 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Segmented(ThemeMode.entries.map { it.label }, settings.theme.ordinal, { i ->
                     Graph.settings.update { it.copy(theme = ThemeMode.entries[i]) }
                 })
+            }
+
+            Card {
+                SectionLabel(tr("Logbook", "Carnet"))
+                SettingRow(
+                    tr("Send readings to the car logbook", "Envoyer les relevés au carnet"),
+                    tr(
+                        "Each code reading, drive check-up and survey is sent to a channel only your car's VIN unlocks; Claude reads it to update the Carnet Qashqai+2 and its to-do list. ${Reports.pending} waiting to be sent.",
+                        "Chaque lecture de codes, bilan de trajet et relevé part sur un canal que seul le VIN de votre voiture permet de retrouver ; Claude le lit pour mettre à jour le Carnet Qashqai+2 et sa liste de choses à faire. ${Reports.pending} en attente d'envoi.",
+                    ),
+                ) {
+                    NothingSwitch(settings.sendReports, { on -> Graph.settings.update { it.copy(sendReports = on) } })
+                }
             }
 
             Card {

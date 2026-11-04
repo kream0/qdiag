@@ -66,6 +66,15 @@ object Dtcs {
         "Vérifier la batterie (12,4 V ou plus moteur arrêté) et la tension de charge (13,6 à 14,7 V moteur tournant), puis l'alternateur et les cosses de batterie.",
     )
 
+    private val LAMBDA = t(
+        "The upstream oxygen sensor is a wideband (5-wire) one. If a new sensor doesn't clear the code, the cause is around it: the wiring and connector (heat or chafing near the exhaust), the heater fuse and relay, and the battery / charging voltage. Check those before buying another sensor.",
+        "La sonde lambda amont est une sonde large bande (5 fils). Si une sonde neuve ne fait pas disparaître le code, la cause est autour : faisceau et connecteur (chaleur ou frottement près de l'échappement), fusible et relais du chauffage, tension de batterie et de charge. À vérifier avant d'acheter une autre sonde.",
+    )
+    private val PEDAL = t(
+        "The accelerator pedal has two sensors that must agree. Check its connector (corrosion, loose pins) and wiring; if the fault stays, the pedal assembly is replaced as one part. A low battery voltage can set these codes too.",
+        "La pédale d'accélérateur a deux capteurs qui doivent concorder. Vérifier son connecteur (oxydation, broches desserrées) et le câblage ; si le défaut reste, la pédale se remplace d'un bloc. Une tension de batterie faible peut aussi déclencher ces codes.",
+    )
+
     private val table: Map<String, E> = buildMap {
         fun put(code: String, en: String, fr: String, sev: Severity, advice: Text? = null, vararg parts: String) =
             put(code, E(t(en, fr), sev, advice, parts.toList()))
@@ -160,6 +169,31 @@ object Dtcs {
         put("P0520", "Oil pressure sensor / switch circuit", "Circuit du capteur de pression d'huile", Severity.FIX, SENSOR_WIRING)
         put("P0524", "Engine oil pressure too low", "Pression d'huile trop basse", Severity.STOP,
             t("Stop the engine and check the oil level now.", "Couper le moteur et vérifier tout de suite le niveau d'huile."), "oilFilter")
+        put("P0030", "O2 sensor heater control circuit (bank 1 sensor 1)", "Commande du chauffage de la sonde lambda amont", Severity.FIX, LAMBDA, "lambdaSensor", "battery")
+        put("P0031", "O2 sensor heater circuit low (bank 1 sensor 1)", "Chauffage de la sonde lambda amont : signal bas", Severity.FIX, LAMBDA, "lambdaSensor")
+        put("P0032", "O2 sensor heater circuit high (bank 1 sensor 1)", "Chauffage de la sonde lambda amont : signal haut", Severity.FIX, LAMBDA, "lambdaSensor")
+        put("P0130", "O2 sensor circuit (bank 1 sensor 1)", "Sonde lambda amont : circuit", Severity.FIX, LAMBDA, "lambdaSensor")
+        put("P0131", "O2 sensor circuit low (bank 1 sensor 1)", "Sonde lambda amont : signal bas", Severity.FIX, LAMBDA, "lambdaSensor")
+        put("P0132", "O2 sensor circuit high (bank 1 sensor 1)", "Sonde lambda amont : signal haut", Severity.FIX, LAMBDA, "lambdaSensor")
+        put("P0133", "O2 sensor slow response (bank 1 sensor 1)", "Sonde lambda amont : réponse lente", Severity.WATCH, LAMBDA, "lambdaSensor")
+        put("P0134", "O2 sensor no activity (bank 1 sensor 1)", "Sonde lambda amont : pas d'activité", Severity.FIX, LAMBDA, "lambdaSensor")
+        put("P0135", "O2 sensor heater circuit (bank 1 sensor 1)", "Sonde lambda amont : circuit de chauffage", Severity.FIX, LAMBDA, "lambdaSensor", "battery")
+        put("P2237", "O2 sensor pump current circuit (bank 1 sensor 1)", "Sonde lambda amont : circuit du courant de pompage", Severity.FIX, LAMBDA, "lambdaSensor")
+        put("P2243", "O2 sensor reference voltage circuit (bank 1 sensor 1)", "Sonde lambda amont : tension de référence", Severity.FIX, LAMBDA, "lambdaSensor")
+        put("P2251", "O2 sensor negative current control circuit (bank 1 sensor 1)", "Sonde lambda amont : circuit de masse virtuelle", Severity.FIX, LAMBDA, "lambdaSensor")
+        put("P2A00", "O2 sensor range / performance (bank 1 sensor 1)", "Sonde lambda amont : plage de mesure", Severity.WATCH,
+            t("Often an air leak (intake or exhaust before the sensor) or a sensor that is ageing; see also the wiring.", "Souvent une prise d'air (admission, ou échappement avant la sonde) ou une sonde qui vieillit ; voir aussi le câblage."),
+            "lambdaSensor")
+        put("P0225", "Accelerator pedal sensor C circuit", "Capteur de pédale d'accélérateur C : circuit", Severity.FIX, PEDAL, "pedal")
+        put("P2120", "Accelerator pedal sensor D circuit", "Capteur de pédale d'accélérateur D : circuit", Severity.FIX, PEDAL, "pedal")
+        put("P2122", "Accelerator pedal sensor D low", "Capteur de pédale D : signal bas", Severity.FIX, PEDAL, "pedal")
+        put("P2123", "Accelerator pedal sensor D high", "Capteur de pédale D : signal haut", Severity.FIX, PEDAL, "pedal")
+        put("P2125", "Accelerator pedal sensor E circuit", "Capteur de pédale d'accélérateur E : circuit", Severity.FIX, PEDAL, "pedal")
+        put("P2127", "Accelerator pedal sensor E low", "Capteur de pédale E : signal bas", Severity.FIX, PEDAL, "pedal")
+        put("P2128", "Accelerator pedal sensor E high", "Capteur de pédale E : signal haut", Severity.FIX, PEDAL, "pedal")
+        put("P2138", "Accelerator pedal sensors D/E disagree", "Capteurs de pédale D et E en désaccord", Severity.FIX, PEDAL, "pedal")
+        put("P0564", "Cruise control switch circuit", "Commandes du régulateur de vitesse : circuit", Severity.INFO,
+            t("The cruise control buttons on the steering wheel or the spiral cable behind the wheel (check the horn and airbag light too).", "Les boutons du régulateur au volant ou le ruban (contacteur tournant) derrière le volant : vérifier aussi le klaxon et le voyant d'airbag."))
         put("P0560", "System voltage", "Tension du réseau de bord", Severity.WATCH, VOLTAGE, "battery", "alternator")
         put("P0562", "System voltage low", "Tension du réseau de bord trop basse", Severity.FIX, VOLTAGE, "battery", "alternator")
         put("P0563", "System voltage high", "Tension du réseau de bord trop haute", Severity.FIX, VOLTAGE, "alternator")

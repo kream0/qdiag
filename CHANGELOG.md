@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- Each code reading, drive check-up and survey is sent to your car logbook (Carnet Qashqai+2), on a channel only your car's VIN unlocks. Settings → Carnet to turn it off.
+- Codes seen on this car are now explained: upstream oxygen sensor (P0130, P0134, P0135, P2A00…), accelerator pedal sensors (P0225, P2120…), cruise control buttons (P0564).
+- Live data shows the oxygen sensor's lambda and current when the engine ECU offers them.
+- Parts without a Nissan number open an Autodoc search by vehicle.
+
 ## 0.1.1
 
 - Finds the adapter's Wi-Fi whatever the case of its name (WiFi_OBDII, WIFI_OBDII…).

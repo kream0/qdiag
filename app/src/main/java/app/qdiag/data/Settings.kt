@@ -30,6 +30,8 @@ data class AppSettings(
     val protocol: String = "",
     /** Posts what the app does with the car to the developer's diagnostics topic (no location, VIN masked). */
     val sendDiagnostics: Boolean = true,
+    /** Sends each reading (codes, drive check-up, survey) to the owner's car logbook. */
+    val sendReports: Boolean = true,
     /** Lets the console send commands that change things in the car (writes, resets, tests). */
     val expertConsole: Boolean = false,
     val autoUpdate: Boolean = true,
@@ -57,6 +59,7 @@ class Settings(context: Context) {
             ssidPrefix = prefs.getString("ssidPrefix", null) ?: d.ssidPrefix,
             protocol = prefs.getString("protocol", null) ?: d.protocol,
             sendDiagnostics = prefs.getBoolean("sendDiagnostics", d.sendDiagnostics),
+            sendReports = prefs.getBoolean("sendReports", d.sendReports),
             expertConsole = prefs.getBoolean("expertConsole", d.expertConsole),
             autoUpdate = prefs.getBoolean("autoUpdate", d.autoUpdate),
             theme = enumOr(prefs.getString("theme", null), d.theme),
@@ -71,6 +74,7 @@ class Settings(context: Context) {
             .putString("ssidPrefix", s.ssidPrefix)
             .putString("protocol", s.protocol)
             .putBoolean("sendDiagnostics", s.sendDiagnostics)
+            .putBoolean("sendReports", s.sendReports)
             .putBoolean("expertConsole", s.expertConsole)
             .putBoolean("autoUpdate", s.autoUpdate)
             .putString("theme", s.theme.name)

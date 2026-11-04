@@ -3,9 +3,10 @@ package app.qdiag.core.kb
 import app.qdiag.core.Text
 
 /** A part of the Qashqai+2 (JJ10E, M9R 2.0 dCi 150, 4WD, built 12/2008), with its Nissan number. */
-data class Part(val key: String, val name: Text, val oem: String?, val note: Text? = null) {
+data class Part(val key: String, val name: Text, val oem: String?, val note: Text? = null, val query: String? = null) {
     /** Autodoc's search for the OEM number, as in the logbook's parts tab. */
-    val searchUrl: String? get() = oem?.let { "https://www.auto-doc.fr/search?keyword=$it" }
+    /** Autodoc search by the Nissan number, or by words when the number isn't known. */
+    val searchUrl: String? get() = (oem ?: query)?.let { "https://www.auto-doc.fr/search?keyword=" + java.net.URLEncoder.encode(it, "UTF-8") }
 }
 
 /**
@@ -43,6 +44,12 @@ object Parts {
         Part("starter", Text("Starter motor", "Démarreur"), "23300JG70A"),
         Part("battery", Text("Battery", "Batterie"), "24410JD13A"),
         Part("oilFilter", Text("Oil filter", "Filtre à huile"), "1520900Q0A"),
+        Part(
+            "lambdaSensor", Text("Upstream oxygen (air/fuel ratio) sensor", "Sonde lambda amont (capteur de richesse)"), null,
+            Text("Nissan number not recorded (diagram 226, item 22693): search by vehicle.", "Référence Nissan non relevée (schéma 226, repère 22693) : chercher par véhicule."),
+            query = "sonde lambda qashqai 2.0 dci",
+        ),
+        Part("pedal", Text("Accelerator pedal (with its sensor)", "Pédale d'accélérateur (avec son capteur)"), "18002JD900"),
     )
 
     private val byKey = all.associateBy { it.key }

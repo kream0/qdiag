@@ -20,6 +20,13 @@ import app.qdiag.data.DriveSummary
 import app.qdiag.data.Settings
 import app.qdiag.data.Store
 import app.qdiag.diag.Diag
+import app.qdiag.diag.Reports
+import app.qdiag.core.kb.Dtcs
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import app.qdiag.Graph
 import app.qdiag.tr
 import app.qdiag.link.SocketTransport
@@ -209,6 +216,7 @@ class CarSession(
         val name = elm { it.info(0x0A) }
         val cal = elm { it.info(0x04) }
         _info.update { it.copy(supported = supported, vin = vin, ecuName = name, calibration = cal) }
+        vin?.let { Reports.setVin(it) }
         Diag.log(
             "car.info", "supported" to supported.sorted().joinToString(" ") { "%02X".format(it) },
             "vin" to vin, "ecu" to name, "cal" to cal,
@@ -230,7 +238,13 @@ class CarSession(
             val pending = elm { it.dtcs(0x07) }
             val permanent = elm { it.dtcs(0x0A) }
             val monitors = elm { it.monitorStatus() }
-            val dist = if (0x31 in _info.value.supported) elm { it.read(0x31) }?.firstOrNull()?.value else null
+            val supported = _info.value.supported
+            suspend fun counter(pid: Int): Double? = if (pid in supported) elm { it.read(pid) }?.firstOrNull()?.value else null
+            val dist = counter(0x31)
+            val distMil = counter(0x21)
+            val warmups = counter(0x30)
+            val minutesSinceClear = counter(0x4E)
+            val volts = elm { it.voltage() }
             val now = System.currentTimeMillis()
             _codes.value = CodesState(stored, pending.orEmpty(), permanent.orEmpty(), monitors, dist, now, busy = false)
             val c = _codes.value
@@ -240,6 +254,37 @@ class CarSession(
                 "mil" to monitors?.milOn, "count" to monitors?.dtcCount,
                 "incomplete" to monitors?.incomplete?.joinToString(",") { it.name.en }, "distClear" to dist,
             )
+            val info = _info.value
+            Reports.send("codes") { level ->
+                putJsonArray("stored") { c.storedList.forEach { add(it) } }
+                putJsonArray("pending") { c.pendingList.forEach { add(it) } }
+                putJsonArray("permanent") { c.permanentList.forEach { add(it) } }
+                putJsonObject("about") {
+                    for (code in (c.storedList + c.pendingList + c.permanentList).distinct()) {
+                        val d = Dtcs.info(code)
+                        putJsonObject(code) {
+                            put("fr", d.title.fr)
+                            put("severity", d.severity.name)
+                            put("known", d.known)
+                            if (level < 2) putJsonArray("parts") { d.parts.forEach { add(it) } }
+                        }
+                    }
+                }
+                monitors?.let { m ->
+                    put("mil", m.milOn)
+                    put("dtcCount", m.dtcCount)
+                    putJsonArray("incomplete") { m.incomplete.forEach { add(it.name.fr) } }
+                }
+                dist?.let { put("kmSinceClear", it) }
+                distMil?.let { put("kmWithMil", it) }
+                warmups?.let { put("warmupsSinceClear", it) }
+                minutesSinceClear?.let { put("minutesSinceClear", it) }
+                (volts ?: info.voltage)?.let { put("batteryV", it) }
+                info.ecuName?.let { put("ecu", it) }
+                info.calibration?.let { put("calibration", it) }
+                info.protocol?.let { put("protocol", it) }
+                if (level < 1) put("supportedPids", info.supported.sorted().joinToString(" ") { "%02X".format(it) })
+            }
         }
     }
 
@@ -330,8 +375,62 @@ class CarSession(
                 ),
             )
             Diag.log("live.stop", "minutes" to "%.1f".format(minutes), "samples" to analyzer.size, *findings.map { it.id to "${it.level}: ${it.detail.en}" }.toTypedArray())
+            reportDrive(started, minutes, findings)
         }
     }
+
+    /** Keys worth summarising first when the drive report must be short. */
+    private val mainKeys = listOf(
+        "coolant", "rpm", "speed", "load", "pedal", "battV", "ecuV", "map", "boost", "boostCmd", "rail", "railCmd", "railAct",
+        "maf", "egrCmd", "egrErr", "egrA", "egrACmd", "dpfDp", "dpfTin", "egt1", "iat", "oil", "fuelRate", "lambda1", "baro",
+    )
+
+    private fun reportDrive(started: Long, minutes: Double, findings: List<Finding>) {
+        val samples = recorded.toList()
+        var km = 0.0
+        for (i in 1 until samples.size) {
+            val v = samples[i].values["speed"] ?: continue
+            val dt = ((samples[i].t - samples[i - 1].t) / 1000.0).coerceIn(0.0, 10.0)
+            km += v * dt / 3600.0
+        }
+        val keys = samples.flatMap { it.values.keys }.distinct()
+        Reports.send("drive") { level ->
+            put("start", started)
+            put("minutes", Math.round(minutes * 10) / 10.0)
+            put("samples", samples.size)
+            put("km", Math.round(km * 10) / 10.0)
+            putJsonArray("findings") {
+                for (f in findings) add(
+                    buildJsonObject {
+                        put("id", f.id)
+                        put("level", f.level.name)
+                        put("fr", f.title.fr)
+                        if (level < 3 && f.level != app.qdiag.core.health.Level.GOOD) put("detail", f.detail.fr)
+                        if (f.parts.isNotEmpty()) putJsonArray("parts") { f.parts.forEach { add(it) } }
+                    },
+                )
+            }
+            val statKeys = when (level) {
+                0 -> mainKeys.filter { it in keys } + (keys - mainKeys.toSet())
+                1 -> mainKeys.filter { it in keys }
+                2 -> mainKeys.take(12).filter { it in keys }
+                else -> emptyList()
+            }
+            if (statKeys.isNotEmpty()) putJsonObject("stats") {
+                for (k in statKeys) {
+                    val v = samples.mapNotNull { it.values[k] }.sorted()
+                    if (v.isEmpty()) continue
+                    putJsonArray(k) {
+                        add(round3(v.first()))
+                        add(round3(v[v.size / 2]))
+                        add(round3(v.last()))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun round3(x: Double): Double = Math.round(x * 1000) / 1000.0
 
     /** The current (or last) live session as CSV, for sharing. */
     fun exportCsv(): File? {
@@ -381,19 +480,41 @@ class CarSession(
         scope.launch {
             _busy.value = "discovery"
             Diag.log("discovery.start")
+            val answered = ArrayList<Triple<String, String, String>>()
+            var asked = 0
             for (p in Discovery.all) {
                 val reply = elm { it.send(p.command, p.timeoutMs) } ?: break
+                asked++
                 val text = reply.replace('\r', ' ').replace(">", "").trim()
                 val shown = if (p.sensitive) "masked (${text.length} chars)" else text
                 Diag.log("discovery", "cmd" to p.command, "what" to p.label, "reply" to shown)
+                val refused = text.isEmpty() || listOf("NO DATA", "?", "ERROR", "UNABLE", "STOPPED", "7F ").any { text.contains(it) } || text == "OK"
+                if (!p.command.startsWith("AT") && !refused) answered += Triple(p.command, p.label, shown)
             }
+            val unknownPids = ArrayList<Pair<String, String>>()
             // Every supported PID once, raw: PIDs the app doesn't decode yet show up here.
             for (pid in _info.value.supported.sorted()) {
                 val reply = elm { it.request("01%02X".format(pid)) } ?: break
                 val raw = (reply as? ElmReply.Data)?.payload(0x41, pid)?.let { Obd.hex(it) } ?: reply.raw.joinToString(" | ")
                 Diag.log("discovery.pid", "pid" to "%02X".format(pid), "raw" to raw, "known" to (Pids[pid] != null))
+                if (Pids[pid] == null) unknownPids += "%02X".format(pid) to raw
             }
             Diag.log("discovery.end")
+            Reports.send("survey") { level ->
+                put("asked", asked)
+                put("answeredCount", answered.size)
+                val cut = when (level) { 0 -> 120; 1 -> 60; 2 -> 30; else -> 0 }
+                if (cut > 0) putJsonArray("answered") {
+                    for ((cmd, label, reply) in answered) add(
+                        buildJsonObject {
+                            put("cmd", cmd)
+                            put("what", label)
+                            put("reply", reply.take(cut))
+                        },
+                    )
+                }
+                if (level < 4) putJsonObject("unknownPids") { for ((pid, raw) in unknownPids) put(pid, raw.take(60)) }
+            }
             _busy.value = null
             scope.launch(Dispatchers.IO) { Diag.flush() }
         }

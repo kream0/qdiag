@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.qdiag.data.ThemeMode
 import app.qdiag.diag.Diag
+import app.qdiag.diag.Reports
 import app.qdiag.ui.AppRoot
 import app.qdiag.ui.theme.DarkPalette
 import app.qdiag.ui.theme.LightPalette
@@ -71,7 +72,10 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         // The phone may now get back to the internet: send what's waiting, keep the rest on disk.
         Diag.persist()
-        Graph.scope.launch(Dispatchers.IO) { Diag.flush() }
+        Graph.scope.launch(Dispatchers.IO) {
+            Reports.flush()
+            Diag.flush()
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

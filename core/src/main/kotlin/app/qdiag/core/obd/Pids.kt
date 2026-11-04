@@ -118,6 +118,18 @@ object Pids {
                 }
             }
         },
+        PidDef(0x24, Text("Oxygen sensor 1 (ratio, voltage)", "Sonde lambda 1 (richesse, tension)"), PidGroup.EXHAUST) { d ->
+            if (d.size < 4) emptyList() else listOf(
+                Signal("lambda1", Text("Lambda (sensor 1)", "Lambda (sonde 1)"), "λ", u16(d, 0) * 2.0 / 65536, 3),
+                Signal("lambdaV1", Text("Oxygen sensor 1 voltage", "Tension de la sonde lambda 1"), "V", u16(d, 2) * 8.0 / 65536, 3),
+            )
+        },
+        PidDef(0x34, Text("Oxygen sensor 1 (ratio, current)", "Sonde lambda 1 (richesse, courant)"), PidGroup.EXHAUST) { d ->
+            if (d.size < 4) emptyList() else listOf(
+                Signal("lambda1", Text("Lambda (sensor 1)", "Lambda (sonde 1)"), "λ", u16(d, 0) * 2.0 / 65536, 3),
+                Signal("lambdaI1", Text("Oxygen sensor 1 current", "Courant de la sonde lambda 1"), "mA", u16(d, 2) / 256.0 - 128, 2),
+            )
+        },
         PidDef(0x7A, Text("Particulate filter pressures", "Pressions du filtre à particules"), PidGroup.EXHAUST) { d ->
             if (d.size < 3) emptyList() else buildList {
                 if (d[0] and 0x01 != 0) add(Signal("dpfDp", Text("DPF differential pressure", "Pression différentielle du FAP"), "kPa", s16(d, 1) * 0.01, 2))
