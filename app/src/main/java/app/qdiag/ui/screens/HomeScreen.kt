@@ -179,12 +179,20 @@ private fun driveLine(d: app.qdiag.data.DriveSummary): String {
 private fun statusTitle(link: LinkStatus): String = when (link.state) {
     LinkState.IDLE -> tr("Not connected", "Non connecté")
     LinkState.JOINING -> tr("Joining the adapter's Wi-Fi…", "Connexion au Wi-Fi de l'adaptateur…")
-    LinkState.CONNECTING -> if (link.detail == "adapter") tr("Talking to the car…", "Dialogue avec la voiture…") else tr("Looking for the adapter…", "Recherche de l'adaptateur…")
+    LinkState.CONNECTING -> when (link.detail) {
+        "adapter" -> tr("Talking to the car…", "Dialogue avec la voiture…")
+        "reconnect" -> tr("Reconnecting to the adapter…", "Reconnexion à l'adaptateur…")
+        else -> tr("Looking for the adapter…", "Recherche de l'adaptateur…")
+    }
     LinkState.READY -> tr("Connected to the car", "Connecté à la voiture")
     LinkState.FAILED -> tr("Connection failed", "Échec de la connexion")
 }
 
 private fun statusHelp(link: LinkStatus, ssid: String): String? = when (link.state) {
+    LinkState.CONNECTING -> if (link.detail == "reconnect") tr(
+        "The adapter dropped the link, usually because starting the engine made it restart. The app reconnects by itself as soon as its Wi-Fi is back; a live session carries on.",
+        "L'adaptateur a coupé la liaison, en général parce que le démarrage du moteur l'a fait redémarrer. L'appli se reconnecte toute seule dès que son Wi-Fi revient ; une session en direct continue.",
+    ) else null
     LinkState.JOINING -> tr(
         "Pick the adapter's network (\"$ssid…\") in Android's prompt.",
         "Choisissez le réseau de l'adaptateur (« $ssid… ») dans la fenêtre d'Android.",
@@ -194,7 +202,10 @@ private fun statusHelp(link: LinkStatus, ssid: String): String? = when (link.sta
             "The adapter didn't answer on Wi-Fi. Is it plugged in with its light on, and is the phone on its Wi-Fi? Check the address in Settings (usually 192.168.0.10:35000).",
             "L'adaptateur ne répond pas en Wi-Fi. Est-il branché, voyant allumé, et le téléphone est-il sur son Wi-Fi ? Vérifiez l'adresse dans Réglages (souvent 192.168.0.10:35000).",
         )
-        "LOST" -> tr("The link to the adapter dropped. Tap Connect again.", "La liaison avec l'adaptateur a été coupée. Appuyez à nouveau sur Se connecter.")
+        "LOST" -> tr(
+            "The link to the adapter dropped and didn't come back within a minute. Check the adapter is still plugged in and the phone on its Wi-Fi, then tap Connect.",
+            "La liaison avec l'adaptateur a été coupée et n'est pas revenue en une minute. Vérifiez que l'adaptateur est toujours branché et le téléphone sur son Wi-Fi, puis appuyez sur Se connecter.",
+        )
         "NO_ECU", "UNABLE_TO_CONNECT", "NO_DATA", "BUS_ERROR", "CAN_ERROR" -> tr(
             "The adapter answers but the car doesn't. Turn the ignition on (or start the engine) and try again.",
             "L'adaptateur répond mais pas la voiture. Mettez le contact (ou démarrez) et réessayez.",

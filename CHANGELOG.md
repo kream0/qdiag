@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Reconnects by itself when the adapter drops the link (it restarts when the engine is started), and a live session carries on instead of stopping.
+
 ## 0.2.0
 
 - Each code reading, drive check-up and survey is sent to your car logbook (Carnet Qashqai+2), on a channel only your car's VIN unlocks. Settings → Carnet to turn it off.

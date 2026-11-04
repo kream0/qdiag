@@ -35,6 +35,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -108,6 +109,9 @@ class CarSession(
     @Volatile private var client: ObdClient? = null
     private var liveJob: Job? = null
     private var connectJob: Job? = null
+    private var reconnectJob: Job? = null
+    /** The owner wants the link up: a dropped link (adapter rebooting on engine start) is retried. */
+    @Volatile private var wantLink = false
     private var analyzer = Analyzer()
     private val recorded = ArrayList<Sample>()
 
@@ -136,44 +140,89 @@ class CarSession(
 
     fun connect() {
         if (_link.value.state == LinkState.CONNECTING || _link.value.state == LinkState.JOINING) return
+        wantLink = true
+        reconnectJob?.cancel()
         connectJob = scope.launch {
-            val s = settings.current
             _link.value = LinkStatus(LinkState.CONNECTING)
-            Diag.log("link.connect", "host" to s.host, "port" to s.port, "ssid" to s.ssidPrefix)
-            try {
-                val socket = wifi.open(s.host, s.port, s.ssidPrefix) { _link.value = LinkStatus(LinkState.JOINING) }
-                _link.value = LinkStatus(LinkState.CONNECTING, "adapter")
-                val t = SocketTransport(socket)
-                transport = t
-                val c = ObdClient(t, ::onExchange)
-                client = c
-                val init = mutex.withLock { withContext(Dispatchers.IO) { c.init(s.protocol.ifBlank { null }) } }
-                Diag.log(
-                    "elm.init", "adapter" to init.adapter, "protocol" to init.protocol, "headers" to init.headers,
-                    "connected" to init.connected, "volts" to init.voltage, "problem" to init.problem?.name,
-                )
-                _info.value = CarInfo(adapter = init.adapter, protocol = init.protocol, headers = init.headers, voltage = init.voltage)
-                if (!init.connected) {
-                    _link.value = LinkStatus(LinkState.FAILED, init.problem?.name ?: "NO_ECU")
-                    return@launch
-                }
-                init.protocol?.let { p -> settings.update { it.copy(protocol = p) } }
-                _link.value = LinkStatus(LinkState.READY)
+            if (open(firstTime = true)) {
                 readVehicle()
                 readCodes()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Diag.error("link.error", e)
-                close()
-                _link.value = LinkStatus(LinkState.FAILED, if (e is IOException) "WIFI" else e.javaClass.simpleName)
             }
         }
     }
 
+    /**
+     * Opens the socket and initialises the adapter. [firstTime]: may show Android's "join the
+     * adapter's Wi-Fi" prompt and reports failures; a reconnection only tries the Wi-Fi the phone
+     * is already on and stays quiet. True when the car answers.
+     */
+    private suspend fun open(firstTime: Boolean): Boolean {
+        val s = settings.current
+        Diag.log(if (firstTime) "link.connect" else "link.reconnect", "host" to s.host, "port" to s.port, "ssid" to s.ssidPrefix)
+        try {
+            val socket = wifi.open(s.host, s.port, if (firstTime) s.ssidPrefix else "") { _link.value = LinkStatus(LinkState.JOINING) }
+            if (firstTime) _link.value = LinkStatus(LinkState.CONNECTING, "adapter")
+            val t = SocketTransport(socket)
+            transport = t
+            val c = ObdClient(t, ::onExchange)
+            client = c
+            val init = mutex.withLock { withContext(Dispatchers.IO) { c.init(s.protocol.ifBlank { null }) } }
+            Diag.log(
+                "elm.init", "adapter" to init.adapter, "protocol" to init.protocol, "headers" to init.headers,
+                "connected" to init.connected, "volts" to init.voltage, "problem" to init.problem?.name, "first" to firstTime,
+            )
+            if (firstTime) {
+                _info.value = CarInfo(adapter = init.adapter, protocol = init.protocol, headers = init.headers, voltage = init.voltage)
+            } else {
+                _info.update { it.copy(voltage = init.voltage ?: it.voltage) }
+            }
+            if (!init.connected) {
+                close()
+                if (firstTime) _link.value = LinkStatus(LinkState.FAILED, init.problem?.name ?: "NO_ECU")
+                return false
+            }
+            init.protocol?.let { p -> settings.update { it.copy(protocol = p) } }
+            _link.value = LinkStatus(LinkState.READY)
+            return true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Diag.error(if (firstTime) "link.error" else "link.retry", e)
+            close()
+            if (firstTime) _link.value = LinkStatus(LinkState.FAILED, if (e is IOException) "WIFI" else e.javaClass.simpleName)
+            return false
+        }
+    }
+
+    /**
+     * The adapter dropped the link, usually because starting the engine made the voltage dip and
+     * it rebooted: wait for its Wi-Fi to come back and reconnect, for about a minute.
+     */
+    private fun reconnect() {
+        if (reconnectJob?.isActive == true) return
+        _link.value = LinkStatus(LinkState.CONNECTING, "reconnect")
+        reconnectJob = scope.launch {
+            for (attempt in 1..15) {
+                delay(if (attempt == 1) 2_500 else 4_000)
+                if (!wantLink) return@launch
+                if (open(firstTime = false)) {
+                    Diag.log("link.back", "attempt" to attempt)
+                    if (_info.value.supported.isEmpty()) readVehicle()
+                    return@launch
+                }
+                _link.value = LinkStatus(LinkState.CONNECTING, "reconnect")
+            }
+            Diag.log("link.gaveUp")
+            _link.value = LinkStatus(LinkState.FAILED, "LOST")
+        }
+    }
+
     fun disconnect() {
+        wantLink = false
         connectJob?.cancel()
         connectJob = null
+        reconnectJob?.cancel()
+        reconnectJob = null
         stopLive()
         close()
         _link.value = LinkStatus(LinkState.IDLE)
@@ -201,7 +250,7 @@ class CarSession(
             if (client !== c) return null
             Diag.error("link.lost", e)
             close()
-            _link.value = LinkStatus(LinkState.FAILED, "LOST")
+            if (wantLink) reconnect() else _link.value = LinkStatus(LinkState.FAILED, "LOST")
             null
         } catch (e: Exception) {
             // A reply the parser didn't expect: keep going, and tell the developer.
@@ -220,7 +269,7 @@ class CarSession(
         Diag.log(
             "car.info", "supported" to supported.sorted().joinToString(" ") { "%02X".format(it) },
             "vin" to vin, "ecu" to name, "cal" to cal,
-            "unknownPids" to supported.filter { Pids[it] == null && it !in setOf(0x01, 0x03, 0x1C) }.joinToString(" ") { "%02X".format(it) },
+            "unknownPids" to supported.filter { Pids[it] == null && it !in setOf(0x01, 0x03, 0x13, 0x1C) }.joinToString(" ") { "%02X".format(it) },
         )
     }
 
@@ -327,7 +376,15 @@ class CarSession(
             val values = LinkedHashMap<String, Signal>()
             val groups = HashMap<String, PidGroup>()
             var battery: Double? = null
-            while (isActive && connected) {
+            while (isActive) {
+                if (!connected) {
+                    // Reconnecting (adapter rebooted): keep the session and carry on once it's back.
+                    if (reconnectJob?.isActive == true) {
+                        delay(500)
+                        continue
+                    }
+                    break
+                }
                 val cycleStart = System.currentTimeMillis()
                 val batch = if (cycle % 5 == 0) fast + slow else fast
                 for (def in batch) {
@@ -338,7 +395,7 @@ class CarSession(
                     }
                 }
                 if (cycle % 8 == 0) elm { it.voltage() }?.let { battery = it }
-                if (!connected) break
+                if (!connected) continue
                 val now = System.currentTimeMillis()
                 val sampleValues = values.mapValues { it.value.value }.toMutableMap()
                 battery?.let { sampleValues["battV"] = it }
