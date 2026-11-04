@@ -5,6 +5,8 @@ import app.qdiag.car.CarSession
 import app.qdiag.data.Settings
 import app.qdiag.data.Store
 import app.qdiag.update.Updater
+import app.qdiag.diag.Diag
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,7 +22,13 @@ object Graph {
         private set
 
     /** Process-wide scope; state bookkeeping runs on Main, IO work switches dispatchers. */
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e ->
+            // Something unexpected in a background task: report it rather than close the app.
+            Diag.error("task.error", e)
+            toast(tr("Something went wrong: ${e.javaClass.simpleName}", "Un problème est survenu : ${e.javaClass.simpleName}"))
+        },
+    )
 
     val http: OkHttpClient by lazy {
         OkHttpClient.Builder()

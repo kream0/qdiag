@@ -126,6 +126,10 @@ jobs:
         run: |
           echo "==== ERRORS ===="
           grep -E "^e: |error:|What went wrong|Could not (find|resolve)|FAILED|AssertionError|expected:" -A 2 build.log | head -150 || true
+          # Also as annotations (readable through the checks API without signing in).
+          grep -E "^e: |What went wrong|FAILED" -A 1 build.log | grep -v '^--$' | head -40 | while IFS= read -r line; do
+            echo "::error::${line//\/home\/runner\/work\/qdiag\/qdiag\//}"
+          done || true
 
       - name: Collect APK
         run: |
@@ -144,7 +148,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_BODY: ${{ github.event.release.body }}
         run: |
-          if [ "$MODE" = create ]; then
+          # The version's section of CHANGELOG.md, when there is one.
+          NOTES=$(awk -v v="## $QDIAG_VERSION_NAME" '$0 == v {on=1; next} /^## / {on=0} on' CHANGELOG.md 2>/dev/null | sed '/./,$!d')
+          if [ -n "$NOTES" ]; then
+            :
+          elif [ "$MODE" = create ]; then
             NOTES=$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
               -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" --jq .body 2>/dev/null || true)
           else

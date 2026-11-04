@@ -72,7 +72,7 @@ class WifiLink(private val context: Context) {
     private suspend fun request(ssidPrefix: String): Network? {
         release()
         val spec = WifiNetworkSpecifier.Builder()
-            .setSsidPattern(PatternMatcher(ssidPrefix, PatternMatcher.PATTERN_PREFIX))
+            .setSsidPattern(PatternMatcher(caseInsensitivePrefix(ssidPrefix), PatternMatcher.PATTERN_ADVANCED_GLOB))
             .build()
         val req = NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
@@ -95,6 +95,16 @@ class WifiLink(private val context: Context) {
                 cont.invokeOnCancellation { release() }
             }
         }
+    }
+
+    /** "WiFi_OBD" → "[Ww][Ii][Ff][Ii]_[Oo][Bb][Dd].*": clones name their Wi-Fi WiFi_OBDII, WIFI_OBDII… */
+    private fun caseInsensitivePrefix(prefix: String): String = buildString {
+        for (c in prefix) when {
+            c.isLetter() && c.lowercaseChar() != c.uppercaseChar() -> append('[').append(c.lowercaseChar()).append(c.uppercaseChar()).append(']')
+            c in ".*+?[]{}()\\^$|" -> append('\\').append(c)
+            else -> append(c)
+        }
+        append(".*")
     }
 
     /** Lets Android drop the adapter's Wi-Fi if this app had asked for it. */

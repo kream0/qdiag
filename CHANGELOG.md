@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- Finds the adapter's Wi-Fi whatever the case of its name (WiFi_OBDII, WIFI_OBDII…).
+- Cancel now really stops a connection in progress.
+- An unexpected reply from the adapter no longer stops the app: it's reported in the diagnostics.
+- A failed code reading keeps the previous one instead of showing "no fault code".
+
 ## 0.1.0
 
 - First version for the Qashqai+2 2.0 dCi and a Wi-Fi ELM327 adapter.

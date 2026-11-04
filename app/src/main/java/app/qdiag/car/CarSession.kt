@@ -20,6 +20,8 @@ import app.qdiag.data.DriveSummary
 import app.qdiag.data.Settings
 import app.qdiag.data.Store
 import app.qdiag.diag.Diag
+import app.qdiag.Graph
+import app.qdiag.tr
 import app.qdiag.link.SocketTransport
 import app.qdiag.link.WifiLink
 import kotlinx.coroutines.CancellationException
@@ -98,6 +100,7 @@ class CarSession(
     @Volatile private var transport: SocketTransport? = null
     @Volatile private var client: ObdClient? = null
     private var liveJob: Job? = null
+    private var connectJob: Job? = null
     private var analyzer = Analyzer()
     private val recorded = ArrayList<Sample>()
 
@@ -126,7 +129,7 @@ class CarSession(
 
     fun connect() {
         if (_link.value.state == LinkState.CONNECTING || _link.value.state == LinkState.JOINING) return
-        scope.launch {
+        connectJob = scope.launch {
             val s = settings.current
             _link.value = LinkStatus(LinkState.CONNECTING)
             Diag.log("link.connect", "host" to s.host, "port" to s.port, "ssid" to s.ssidPrefix)
@@ -162,6 +165,8 @@ class CarSession(
     }
 
     fun disconnect() {
+        connectJob?.cancel()
+        connectJob = null
         stopLive()
         close()
         _link.value = LinkStatus(LinkState.IDLE)
@@ -191,6 +196,10 @@ class CarSession(
             close()
             _link.value = LinkStatus(LinkState.FAILED, "LOST")
             null
+        } catch (e: Exception) {
+            // A reply the parser didn't expect: keep going, and tell the developer.
+            Diag.error("elm.error", e)
+            null
         }
     }
 
@@ -211,12 +220,19 @@ class CarSession(
         scope.launch {
             _codes.update { it.copy(busy = true) }
             val stored = elm { it.dtcs(0x03) }
+            if (stored == null) {
+                // Link lost or the ECU refused: keep the previous reading.
+                _codes.update { it.copy(busy = false) }
+                Diag.log("codes.fail")
+                if (connected) Graph.toast(tr("Couldn't read the codes", "Lecture des codes impossible"))
+                return@launch
+            }
             val pending = elm { it.dtcs(0x07) }
             val permanent = elm { it.dtcs(0x0A) }
             val monitors = elm { it.monitorStatus() }
             val dist = if (0x31 in _info.value.supported) elm { it.read(0x31) }?.firstOrNull()?.value else null
             val now = System.currentTimeMillis()
-            _codes.value = CodesState(stored.orEmpty(), pending.orEmpty(), permanent.orEmpty(), monitors, dist, now, busy = false)
+            _codes.value = CodesState(stored, pending.orEmpty(), permanent.orEmpty(), monitors, dist, now, busy = false)
             val c = _codes.value
             store.addRead(CodeRead(now, c.storedList, c.pendingList, c.permanentList))
             Diag.log(
