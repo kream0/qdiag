@@ -7,6 +7,7 @@ import app.qdiag.core.health.Sample
 import app.qdiag.core.obd.MonitorStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class ChecksTest {
 
@@ -45,5 +46,17 @@ class ChecksTest {
         assertEquals(Level.GOOD, r["mil"]!!.level)
         assertEquals(Level.GOOD, r["monitors"]!!.level)
         assertEquals(Level.GOOD, r["stored"]!!.level)
+    }
+
+    @Test
+    fun batteryNeedsKnownEngineState() {
+        // A session that only read the adapter's voltage (no rpm): no verdict on the battery.
+        val a = Analyzer()
+        a.addAll((0 until 200).map { Sample(it * 1000L, mapOf("battV" to 14.2)) })
+        assertTrue(a.findings().none { it.id == "battery" })
+        // Engine stopped (rpm 0) at 11.9 V: discharged.
+        val b = Analyzer()
+        b.addAll((0 until 50).map { Sample(it * 1000L, mapOf("battV" to 11.9, "rpm" to 0.0)) })
+        assertEquals(Level.WARN, b.findings().first { it.id == "battery" }.level)
     }
 }

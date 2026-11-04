@@ -38,6 +38,8 @@ class Analyzer {
     val size: Int get() = samples.size
 
     private fun running(s: Sample) = (s["rpm"] ?: 0.0) > 450
+    /** Engine known to be stopped: rpm read and zero (without rpm we can't tell). */
+    private fun stopped(s: Sample) = s["rpm"]?.let { it < 100 } ?: false
     private fun median(xs: List<Double>): Double? = xs.sorted().let { if (it.isEmpty()) null else it[it.size / 2] }
     private fun f1(x: Double) = "%.1f".format(x)
     private fun f0(x: Double) = "%.0f".format(x)
@@ -46,7 +48,8 @@ class Analyzer {
 
     /** Resting voltage, engine off (the adapter's own reading, `ATRV`, or the ECU's). */
     private fun battery(): Finding? {
-        val v = samples.filter { !running(it) }.mapNotNull { it["battV"] ?: it["ecuV"] }
+        // Above 13.3 V the alternator is still charging (or just stopped): not a resting voltage.
+        val v = samples.filter { stopped(it) }.mapNotNull { it["battV"] ?: it["ecuV"] }.filter { it < 13.3 }
         val m = median(v) ?: return null
         val (level, en, fr) = when {
             m >= 12.4 -> Triple(Level.GOOD, "Battery charged", "Batterie chargée")

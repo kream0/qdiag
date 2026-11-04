@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- The battery check only judges the resting voltage when the engine is known to be stopped (a session without engine speed no longer reports "battery charged" from the charging voltage).
+
 ## 0.3.1
 
 - Live data started right after connecting now waits for the list of values the car offers, instead of recording only the battery.
