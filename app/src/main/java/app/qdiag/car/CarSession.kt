@@ -112,6 +112,9 @@ class CarSession(
     private var reconnectJob: Job? = null
     /** The owner wants the link up: a dropped link (adapter rebooting on engine start) is retried. */
     @Volatile private var wantLink = false
+    /** Last exchange with the adapter: the link dies when it stays quiet (see [keepAlive]). */
+    @Volatile private var lastTraffic = 0L
+    private var keepAliveJob: Job? = null
     private var analyzer = Analyzer()
     private val recorded = ArrayList<Sample>()
 
@@ -135,6 +138,7 @@ class CarSession(
     val connected: Boolean get() = _link.value.state == LinkState.READY
 
     private fun onExchange(e: Exchange) {
+        lastTraffic = System.currentTimeMillis()
         _console.update { (it + e).takeLast(600) }
     }
 
@@ -183,6 +187,12 @@ class CarSession(
             }
             init.protocol?.let { p -> settings.update { it.copy(protocol = p) } }
             _link.value = LinkStatus(LinkState.READY)
+            wifi.watch {
+                // Android dropped the adapter's Wi-Fi: close now so the next command reconnects.
+                Diag.log("link.wifiLost")
+                transport?.close()
+            }
+            keepAlive()
             return true
         } catch (e: CancellationException) {
             throw e
@@ -217,8 +227,27 @@ class CarSession(
         }
     }
 
+    /**
+     * The first sessions lost the link after 30 s to 2 min without traffic (between reading the
+     * codes and starting live data). While nothing else talks to the adapter, ask it for the
+     * battery voltage every few seconds: it keeps the link busy and the voltage on screen fresh.
+     */
+    private fun keepAlive() {
+        if (keepAliveJob?.isActive == true) return
+        keepAliveJob = scope.launch {
+            while (isActive && wantLink) {
+                delay(2_000)
+                if (!connected || liveJob?.isActive == true || _busy.value != null || mutex.isLocked) continue
+                if (System.currentTimeMillis() - lastTraffic < 4_000) continue
+                elm { it.voltage() }?.let { v -> _info.update { it.copy(voltage = v) } }
+            }
+        }
+    }
+
     fun disconnect() {
         wantLink = false
+        keepAliveJob?.cancel()
+        keepAliveJob = null
         connectJob?.cancel()
         connectJob = null
         reconnectJob?.cancel()

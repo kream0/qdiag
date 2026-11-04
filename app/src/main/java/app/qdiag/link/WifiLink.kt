@@ -33,6 +33,10 @@ import kotlin.coroutines.resume
 class WifiLink(private val context: Context) {
     private val cm = context.getSystemService(ConnectivityManager::class.java)
     private var requested: ConnectivityManager.NetworkCallback? = null
+    private var watching: ConnectivityManager.NetworkCallback? = null
+    /** The Wi-Fi network the current socket is on. */
+    @Volatile var network: Network? = null
+        private set
 
     /** Wi-Fi networks the phone is currently on. */
     @Suppress("DEPRECATION")
@@ -60,8 +64,9 @@ class WifiLink(private val context: Context) {
         try {
             network.socketFactory.createSocket().apply {
                 tcpNoDelay = true
+                keepAlive = true
                 connect(InetSocketAddress(host, port), 3_000)
-            }
+            }.also { this@WifiLink.network = network }
         } catch (e: IOException) {
             Diag.log("link.try", "error" to e.toString())
             null
@@ -107,8 +112,30 @@ class WifiLink(private val context: Context) {
         append(".*")
     }
 
+    /** Calls [whenLost] if Android drops the Wi-Fi network the socket is on. */
+    fun watch(whenLost: () -> Unit) {
+        unwatch()
+        val n = network ?: return
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onLost(lost: Network) {
+                if (lost == n) whenLost()
+            }
+        }
+        val req = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        if (runCatching { cm.registerNetworkCallback(req, cb) }.isSuccess) watching = cb
+    }
+
+    private fun unwatch() {
+        watching?.let { runCatching { cm.unregisterNetworkCallback(it) } }
+        watching = null
+    }
+
     /** Lets Android drop the adapter's Wi-Fi if this app had asked for it. */
     fun release() {
+        unwatch()
         requested?.let { runCatching { cm.unregisterNetworkCallback(it) } }
         requested = null
     }

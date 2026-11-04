@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- Keeps the link to the adapter busy (it asks for the battery voltage every few seconds) so it no longer drops while you move between screens; the voltage on the home screen stays up to date.
+- Notices straight away when the phone leaves the adapter's Wi-Fi, and reconnects.
+
 ## 0.2.2
 
 - A live session cut off by a lost connection now ends properly (its check-up is kept) instead of showing as running with nothing being read.
